@@ -1,5 +1,6 @@
 from mmcv.runner.hooks import HOOKS, Hook
 from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
+from mmdet.apis.train import MyMMDistributedDataParallel
 import torch.nn as nn
 import math
 
@@ -7,7 +8,8 @@ import math
 def is_parallel(model):
     # Returns True if model is of type DP or DDP
     return type(model) in (
-    nn.parallel.DataParallel, nn.parallel.DistributedDataParallel, MMDataParallel, MMDistributedDataParallel)
+        nn.parallel.DataParallel, nn.parallel.DistributedDataParallel, MMDataParallel, MMDistributedDataParallel,
+        MyMMDistributedDataParallel)
 
 
 @HOOKS.register_module(force=True)
