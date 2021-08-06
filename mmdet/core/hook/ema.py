@@ -2,10 +2,10 @@ from mmcv.runner.hooks import HOOKS, Hook
 from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
 import torch.nn as nn
 import math
-from mmdet.apis.train import MyMMDistributedDataParallel
 
 
 def is_parallel(model):
+    from mmdet.apis.train import MyMMDistributedDataParallel
     return type(model) in (
         nn.parallel.DataParallel, nn.parallel.DistributedDataParallel, MMDataParallel, MMDistributedDataParallel,
         MyMMDistributedDataParallel)
