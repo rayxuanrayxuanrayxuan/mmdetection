@@ -1,7 +1,14 @@
-import math
-
-from mmcv.parallel import is_module_wrapper
 from mmcv.runner.hooks import HOOKS, Hook
+from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
+import torch.nn as nn
+import math
+from mmdet.apis.train import MyMMDistributedDataParallel
+
+
+def is_parallel(model):
+    return type(model) in (
+        nn.parallel.DataParallel, nn.parallel.DistributedDataParallel, MMDataParallel, MMDistributedDataParallel,
+        MyMMDistributedDataParallel)
 
 
 class BaseEMAHook(Hook):
@@ -47,7 +54,7 @@ class BaseEMAHook(Hook):
         Register ema parameter as ``named_buffer`` to model.
         """
         model = runner.model
-        if is_module_wrapper(model):
+        if is_parallel(model):
             model = model.module
         self.param_ema_buffer = {}
         if self.skip_buffers:

@@ -1,5 +1,13 @@
-from mmcv.parallel import is_module_wrapper
 from mmcv.runner.hooks import HOOKS, Hook
+from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
+import torch.nn as nn
+from mmdet.apis.train import MyMMDistributedDataParallel
+
+
+def is_parallel(model):
+    return type(model) in (
+        nn.parallel.DataParallel, nn.parallel.DistributedDataParallel, MMDataParallel, MMDistributedDataParallel,
+        MyMMDistributedDataParallel)
 
 
 @HOOKS.register_module()
@@ -23,7 +31,7 @@ class YOLOXModeSwitchHook(Hook):
         epoch = runner.epoch
         train_loader = runner.data_loader
         model = runner.model
-        if is_module_wrapper(model):
+        if is_parallel(model):
             model = model.module
         if (epoch + 1) == runner.max_epochs - self.num_last_epochs:
             runner.logger.info('No mosaic and mixup aug now!')
