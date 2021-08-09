@@ -12,6 +12,7 @@ from .transforms import (Albu, CutOut, Expand, MinIoURandomCrop, MixUp, Mosaic,
                          Normalize, Pad, PhotoMetricDistortion, RandomAffine,
                          RandomCenterCropPad, RandomCrop, RandomFlip,
                          RandomShift, Resize, SegRescale)
+from .transforms import YoloXColorJit
 
 __all__ = [
     'Compose', 'to_tensor', 'ToTensor', 'ImageToTensor', 'ToDataContainer',

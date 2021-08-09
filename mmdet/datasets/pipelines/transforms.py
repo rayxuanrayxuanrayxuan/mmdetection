@@ -533,7 +533,7 @@ class RandomShift:
                 bbox_w = bboxes[..., 2] - bboxes[..., 0]
                 bbox_h = bboxes[..., 3] - bboxes[..., 1]
                 valid_inds = (bbox_w > self.filter_thr_px) & (
-                    bbox_h > self.filter_thr_px)
+                        bbox_h > self.filter_thr_px)
                 # If the shift does not contain any gt-bbox area, skip this
                 # image.
                 if key == 'gt_bboxes' and not valid_inds.any():
@@ -734,7 +734,7 @@ class RandomCrop:
                  allow_negative_crop=False,
                  bbox_clip_border=True):
         if crop_type not in [
-                'relative_range', 'relative', 'absolute', 'absolute_range'
+            'relative_range', 'relative', 'absolute', 'absolute_range'
         ]:
             raise ValueError(f'Invalid crop_type {crop_type}.')
         if crop_type in ['absolute', 'absolute_range']:
@@ -797,7 +797,7 @@ class RandomCrop:
                 bboxes[:, 0::2] = np.clip(bboxes[:, 0::2], 0, img_shape[1])
                 bboxes[:, 1::2] = np.clip(bboxes[:, 1::2], 0, img_shape[0])
             valid_inds = (bboxes[:, 2] > bboxes[:, 0]) & (
-                bboxes[:, 3] > bboxes[:, 1])
+                    bboxes[:, 3] > bboxes[:, 1])
             # If the crop does not contain any gt-bbox area and
             # allow_negative_crop is False, skip this image.
             if (key == 'gt_bboxes' and not valid_inds.any()
@@ -814,7 +814,7 @@ class RandomCrop:
             if mask_key in results:
                 results[mask_key] = results[mask_key][
                     valid_inds.nonzero()[0]].crop(
-                        np.asarray([crop_x1, crop_y1, crop_x2, crop_y2]))
+                    np.asarray([crop_x1, crop_y1, crop_x2, crop_y2]))
 
         # crop semantic seg
         for key in results.get('seg_fields', []):
@@ -1243,7 +1243,7 @@ class MinIoURandomCrop:
                 # seg fields
                 for key in results.get('seg_fields', []):
                     results[key] = results[key][patch[1]:patch[3],
-                                                patch[0]:patch[2]]
+                                   patch[0]:patch[2]]
                 return results
 
     def __repr__(self):
@@ -1668,8 +1668,8 @@ class RandomCenterCropPad:
         """
         center = (boxes[:, :2] + boxes[:, 2:]) / 2
         mask = (center[:, 0] > patch[0]) * (center[:, 1] > patch[1]) * (
-            center[:, 0] < patch[2]) * (
-                center[:, 1] < patch[3])
+                center[:, 0] < patch[2]) * (
+                       center[:, 1] < patch[3])
         return mask
 
     def _crop_image_and_paste(self, image, center, size):
@@ -1719,7 +1719,7 @@ class RandomCenterCropPad:
             cropped_center_y - top, cropped_center_y + bottom,
             cropped_center_x - left, cropped_center_x + right
         ],
-                          dtype=np.float32)
+            dtype=np.float32)
 
         return cropped_img, border, patch
 
@@ -1773,7 +1773,7 @@ class RandomCenterCropPad:
                         bboxes[:, 0:4:2] = np.clip(bboxes[:, 0:4:2], 0, new_w)
                         bboxes[:, 1:4:2] = np.clip(bboxes[:, 1:4:2], 0, new_h)
                     keep = (bboxes[:, 2] > bboxes[:, 0]) & (
-                        bboxes[:, 3] > bboxes[:, 1])
+                            bboxes[:, 3] > bboxes[:, 1])
                     bboxes = bboxes[keep]
                     results[key] = bboxes
                     if key in ['gt_bboxes']:
@@ -2114,7 +2114,7 @@ class Mosaic:
                              center_position_xy[0], \
                              center_position_xy[1]
             crop_coord = img_shape_wh[0] - (x2 - x1), img_shape_wh[1] - (
-                y2 - y1), img_shape_wh[0], img_shape_wh[1]
+                    y2 - y1), img_shape_wh[0], img_shape_wh[1]
 
         elif loc == 'top_right':
             # index1 to top right part of image
@@ -2325,7 +2325,7 @@ class MixUp:
         if padded_img.shape[1] > target_w:
             x_offset = random.randint(0, padded_img.shape[1] - target_w)
         padded_cropped_img = padded_img[y_offset:y_offset + target_h,
-                                        x_offset:x_offset + target_w]
+                             x_offset:x_offset + target_w]
 
         # 6. adjust bbox
         retrieve_gt_bboxes = retrieve_results['gt_bboxes']
@@ -2336,7 +2336,7 @@ class MixUp:
 
         if is_filp:
             retrieve_gt_bboxes[:, 0::2] = (
-                origin_w - retrieve_gt_bboxes[:, 0::2][:, ::-1])
+                    origin_w - retrieve_gt_bboxes[:, 0::2][:, ::-1])
 
         # 7. filter
         cp_retrieve_gt_bboxes = retrieve_gt_bboxes.copy()
@@ -2481,8 +2481,8 @@ class RandomAffine:
         translate_matrix = self._get_translation_matrix(trans_x, trans_y)
 
         warp_matrix = (
-            translate_matrix @ shear_matrix @ rotation_matrix @ scaling_matrix
-            @ center_matrix)
+                translate_matrix @ shear_matrix @ rotation_matrix @ scaling_matrix
+                @ center_matrix)
 
         img = cv2.warpPerspective(
             img,
@@ -2586,3 +2586,45 @@ class RandomAffine:
     def _get_translation_matrix(x, y):
         translation_matrix = np.array([[1, 0., x], [0., 1, y], [0., 0., 1.]])
         return translation_matrix
+
+
+import random as rn
+
+
+def _distort(image):
+    def _convert(image, alpha=1, beta=0):
+        tmp = image.astype(float) * alpha + beta
+        tmp[tmp < 0] = 0
+        tmp[tmp > 255] = 255
+        image[:] = tmp
+
+    image = image.copy()
+
+    if rn.randrange(2):
+        _convert(image, beta=random.uniform(-32, 32))
+
+    if rn.randrange(2):
+        _convert(image, alpha=random.uniform(0.5, 1.5))
+
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+
+    if rn.randrange(2):
+        tmp = image[:, :, 0].astype(int) + random.randint(-18, 18)
+        tmp %= 180
+        image[:, :, 0] = tmp
+
+    if rn.randrange(2):
+        _convert(image[:, :, 1], alpha=random.uniform(0.5, 1.5))
+
+    image = cv2.cvtColor(image, cv2.COLOR_HSV2BGR)
+
+    return image
+
+
+@PIPELINES.register_module()
+class YoloXColorJit:
+    def __call__(self, results):
+        img = results["img"]
+        image_t = _distort(img)
+        results["img"] = image_t
+        return results

@@ -33,12 +33,7 @@ train_pipeline = [
         scaling_ratio_range=(0.1, 2),
         border=(-img_scale[0] // 2, -img_scale[1] // 2)),
     dict(type='MixUp', img_scale=img_scale, ratio_range=(0.8, 1.6)),
-    dict(
-        type='PhotoMetricDistortion',
-        brightness_delta=32,
-        contrast_range=(0.5, 1.5),
-        saturation_range=(0.5, 1.5),
-        hue_delta=18),
+    dict(type='YoloXColorJit'),
     dict(type='RandomFlip', flip_ratio=0.5),
     dict(type='Resize', keep_ratio=True),
     dict(type='Pad', pad_to_square=True, pad_val=114.0),
