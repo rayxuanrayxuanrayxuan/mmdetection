@@ -175,12 +175,12 @@ class BaseDetector(BaseModule, metaclass=ABCMeta):
             return self.forward_test(img, img_metas, **kwargs)
 
     def _preprocss_data(self, img, img_metas, kwargs):
-        img = img.data[0].cuda()
+        img = img.data[0].cuda(non_blocking=True)
         img_metas = img_metas.data[0]
         gt_bboxes = kwargs['gt_bboxes'].data[0]
-        gt_bboxes = [bbox.cuda() for bbox in gt_bboxes]
+        gt_bboxes = [bbox.cuda(non_blocking=True) for bbox in gt_bboxes]
         gt_labels = kwargs['gt_labels'].data[0]
-        gt_labels = [label.cuda() for label in gt_labels]
+        gt_labels = [label.cuda(non_blocking=True) for label in gt_labels]
 
         data = {'gt_bboxes': gt_bboxes, "gt_labels": gt_labels}
 
