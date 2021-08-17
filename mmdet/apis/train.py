@@ -3,7 +3,9 @@ import warnings
 
 import numpy as np
 import torch
-from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
+from mmcv.parallel import MMDataParallel as InternMMDataParallel
+from mmcv.parallel import MMDistributedDataParallel as InternMMDistributedDataParallel
+
 from mmcv.runner import (HOOKS, DistSamplerSeedHook, EpochBasedRunner,
                          Fp16OptimizerHook, OptimizerHook, build_optimizer,
                          build_runner)
@@ -13,6 +15,20 @@ from mmdet.core import DistEvalHook, EvalHook
 from mmdet.datasets import (build_dataloader, build_dataset,
                             replace_ImageToTensor)
 from mmdet.utils import get_root_logger
+
+from torch.nn.parallel.scatter_gather import scatter_kwargs
+
+
+class MMDistributedDataParallel(InternMMDistributedDataParallel):
+    def scatter(self, inputs, kwargs, device_ids):
+        # Use pytorch api
+        return scatter_kwargs(inputs, kwargs, device_ids, dim=self.dim)
+
+
+class MMDataParallel(InternMMDataParallel):
+    def scatter(self, inputs, kwargs, device_ids):
+        # Use pytorch api
+        return scatter_kwargs(inputs, kwargs, device_ids, dim=self.dim)
 
 
 def set_random_seed(seed, deterministic=False):

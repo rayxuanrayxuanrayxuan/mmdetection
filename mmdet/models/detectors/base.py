@@ -167,10 +167,29 @@ class BaseDetector(BaseModule, metaclass=ABCMeta):
             assert len(img_metas) == 1
             return self.onnx_export(img[0], img_metas[0])
 
+        img, img_metas, kwarg = self._preprocss_data(img, img_metas, kwargs)
+
         if return_loss:
             return self.forward_train(img, img_metas, **kwargs)
         else:
             return self.forward_test(img, img_metas, **kwargs)
+
+    def _preprocss_data(self, img, img_metas, kwargs):
+        img = img.data[0].cuda()
+        img_metas = img_metas.data[0]
+        gt_bboxes = kwargs['gt_bboxes'].data[0]
+        gt_bboxes = [bbox.cuda() for bbox in gt_bboxes]
+        gt_labels = kwargs['gt_labels'].data[0]
+        gt_labels = [label.cuda() for label in gt_labels]
+
+        data = {'gt_bboxes': gt_bboxes, "gt_labels": gt_labels}
+
+        if 'gt_masks' in kwargs:
+            gt_masks = kwargs['gt_masks'].data[0]
+            data['gt_masks'] = gt_masks
+
+        kwargs.update(data)
+        return img, img_metas, kwargs
 
     def _parse_losses(self, losses):
         """Parse the raw outputs (losses) of the network.
