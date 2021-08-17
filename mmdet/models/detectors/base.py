@@ -152,8 +152,8 @@ class BaseDetector(BaseModule, metaclass=ABCMeta):
             assert 'proposals' not in kwargs
             return self.aug_test(imgs, img_metas, **kwargs)
 
-    @auto_fp16(apply_to=('img', ))
-    def forward(self, img, img_metas, return_loss=True, **kwargs):
+    @auto_fp16(apply_to=('img',))
+    def _forward(self, img, img_metas=None, return_loss=True, **kwargs):
         """Calls either :func:`forward_train` or :func:`forward_test` depending
         on whether ``return_loss`` is ``True``.
 
@@ -175,18 +175,24 @@ class BaseDetector(BaseModule, metaclass=ABCMeta):
             return self.forward_test(img, img_metas, **kwargs)
 
     def _preprocss_data(self, img, img_metas, kwargs):
+        # Obsolete mmcv MMDDP
+        data = img[0]
+        img = data['img']
+        img_metas = data['img_metas']
+        gt_bboxes = data['gt_bboxes']
+        gt_labels = data['gt_labels']
+        if 'gt_masks' in data:
+            gt_masks = data['gt_masks'].data[0]
+            kwargs.update({'gt_masks': gt_masks})
+
         img = img.data[0].cuda(non_blocking=True)
         img_metas = img_metas.data[0]
-        gt_bboxes = kwargs['gt_bboxes'].data[0]
+        gt_bboxes = gt_bboxes.data[0]
         gt_bboxes = [bbox.cuda(non_blocking=True) for bbox in gt_bboxes]
-        gt_labels = kwargs['gt_labels'].data[0]
+        gt_labels = gt_labels.data[0]
         gt_labels = [label.cuda(non_blocking=True) for label in gt_labels]
 
         data = {'gt_bboxes': gt_bboxes, "gt_labels": gt_labels}
-
-        if 'gt_masks' in kwargs:
-            gt_masks = kwargs['gt_masks'].data[0]
-            data['gt_masks'] = gt_masks
 
         kwargs.update(data)
         return img, img_metas, kwargs
@@ -226,7 +232,7 @@ class BaseDetector(BaseModule, metaclass=ABCMeta):
 
         return loss, log_vars
 
-    def train_step(self, data, optimizer):
+    def forward(self, data, optimizer):
         """The iteration step during training.
 
         This method defines an iteration step during training, except for the
@@ -253,11 +259,11 @@ class BaseDetector(BaseModule, metaclass=ABCMeta):
                   DDP, it means the batch size on each GPU), which is used for
                   averaging the logs.
         """
-        losses = self(**data)
+        losses = self._forward(data)
         loss, log_vars = self._parse_losses(losses)
 
         outputs = dict(
-            loss=loss, log_vars=log_vars, num_samples=len(data['img_metas']))
+            loss=loss, log_vars=log_vars, num_samples=len(data[0]['img_metas'].data[0]))
 
         return outputs
 
