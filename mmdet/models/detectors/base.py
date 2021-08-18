@@ -9,7 +9,8 @@ from mmcv.runner import BaseModule, auto_fp16
 
 from mmdet.core.visualization import imshow_det_bboxes
 
-from torch.nn.parallel._functions import Scatter
+# from torch.nn.parallel._functions import Scatter
+from mmcv.parallel._functions import Scatter
 
 
 class BaseDetector(BaseModule, metaclass=ABCMeta):
@@ -184,12 +185,14 @@ class BaseDetector(BaseModule, metaclass=ABCMeta):
         # gt_labels = kwargs['gt_labels'].data[0]
         # gt_labels = [label.cuda(non_blocking=True) for label in gt_labels]
 
-        img = Scatter.apply([0], None, 0, img.data[0])[0]
+        # img = Scatter.apply([0], None, 0, img.data[0])[0]
+
+        img = Scatter.forward([0], img.data)[0]
         img_metas = img_metas.data[0]
         gt_bboxes = kwargs['gt_bboxes'].data[0]
-        gt_bboxes = [Scatter.apply([0], None, 0, bbox)[0] for bbox in gt_bboxes]
+        gt_bboxes = Scatter.forward([0], gt_bboxes)
         gt_labels = kwargs['gt_labels'].data[0]
-        gt_labels = [Scatter.apply([0], None, 0, label)[0] for label in gt_labels]
+        gt_labels = Scatter.forward([0], gt_labels)
 
         data = {'gt_bboxes': gt_bboxes, "gt_labels": gt_labels}
 
