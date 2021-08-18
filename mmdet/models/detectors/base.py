@@ -9,6 +9,8 @@ from mmcv.runner import BaseModule, auto_fp16
 
 from mmdet.core.visualization import imshow_det_bboxes
 
+from torch.nn.parallel._functions import Scatter
+
 
 class BaseDetector(BaseModule, metaclass=ABCMeta):
     """Base class for detectors."""
@@ -152,7 +154,7 @@ class BaseDetector(BaseModule, metaclass=ABCMeta):
             assert 'proposals' not in kwargs
             return self.aug_test(imgs, img_metas, **kwargs)
 
-    @auto_fp16(apply_to=('img', ))
+    @auto_fp16(apply_to=('img',))
     def forward(self, img, img_metas, return_loss=True, **kwargs):
         """Calls either :func:`forward_train` or :func:`forward_test` depending
         on whether ``return_loss`` is ``True``.
@@ -175,12 +177,19 @@ class BaseDetector(BaseModule, metaclass=ABCMeta):
             return self.forward_test(img, img_metas, **kwargs)
 
     def _preprocss_data(self, img, img_metas, kwargs):
-        img = img.data[0].cuda(non_blocking=True)
+        # img = img.data[0].cuda(non_blocking=True)
+        # img_metas = img_metas.data[0]
+        # gt_bboxes = kwargs['gt_bboxes'].data[0]
+        # gt_bboxes = [bbox.cuda(non_blocking=True) for bbox in gt_bboxes]
+        # gt_labels = kwargs['gt_labels'].data[0]
+        # gt_labels = [label.cuda(non_blocking=True) for label in gt_labels]
+
+        img = Scatter.apply([torch.device('cuda')], None, 0, img.data[0])[0]
         img_metas = img_metas.data[0]
         gt_bboxes = kwargs['gt_bboxes'].data[0]
-        gt_bboxes = [bbox.cuda(non_blocking=True) for bbox in gt_bboxes]
+        gt_bboxes = [Scatter.apply([torch.device('cuda')], None, 0, bbox)[0] for bbox in gt_bboxes]
         gt_labels = kwargs['gt_labels'].data[0]
-        gt_labels = [label.cuda(non_blocking=True) for label in gt_labels]
+        gt_labels = [Scatter.apply([torch.device('cuda')], None, 0, label)[0] for label in gt_labels]
 
         data = {'gt_bboxes': gt_bboxes, "gt_labels": gt_labels}
 
