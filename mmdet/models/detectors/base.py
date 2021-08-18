@@ -184,12 +184,12 @@ class BaseDetector(BaseModule, metaclass=ABCMeta):
         # gt_labels = kwargs['gt_labels'].data[0]
         # gt_labels = [label.cuda(non_blocking=True) for label in gt_labels]
 
-        img = Scatter.apply([torch.device('cuda')], None, 0, img.data[0])[0]
+        img = Scatter.apply([0], None, 0, img.data[0])[0]
         img_metas = img_metas.data[0]
         gt_bboxes = kwargs['gt_bboxes'].data[0]
-        gt_bboxes = [Scatter.apply([torch.device('cuda')], None, 0, bbox)[0] for bbox in gt_bboxes]
+        gt_bboxes = [Scatter.apply([0], None, 0, bbox)[0] for bbox in gt_bboxes]
         gt_labels = kwargs['gt_labels'].data[0]
-        gt_labels = [Scatter.apply([torch.device('cuda')], None, 0, label)[0] for label in gt_labels]
+        gt_labels = [Scatter.apply([0], None, 0, label)[0] for label in gt_labels]
 
         data = {'gt_bboxes': gt_bboxes, "gt_labels": gt_labels}
 

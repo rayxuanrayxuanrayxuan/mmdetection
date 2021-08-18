@@ -22,13 +22,15 @@ from torch.nn.parallel.scatter_gather import scatter_kwargs
 class MMDistributedDataParallel(InternMMDistributedDataParallel):
     def scatter(self, inputs, kwargs, device_ids):
         # Use pytorch api
-        return scatter_kwargs(inputs, kwargs, device_ids, dim=self.dim)
+        # return scatter_kwargs(inputs, kwargs, device_ids, dim=self.dim)
+        return [inputs], [kwargs]
 
 
 class MMDataParallel(InternMMDataParallel):
     def scatter(self, inputs, kwargs, device_ids):
         # Use pytorch api
-        return scatter_kwargs(inputs, kwargs, device_ids, dim=self.dim)
+        # return scatter_kwargs(inputs, kwargs, device_ids, dim=self.dim)
+        return [inputs], [kwargs]
 
 
 def set_random_seed(seed, deterministic=False):
