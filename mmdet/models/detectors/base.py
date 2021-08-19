@@ -5,6 +5,8 @@ import mmcv
 import numpy as np
 import torch
 import torch.distributed as dist
+import torch.nn.functional as F
+
 from mmcv.runner import BaseModule, auto_fp16
 
 from mmdet.core.visualization import imshow_det_bboxes
@@ -172,38 +174,58 @@ class BaseDetector(BaseModule, metaclass=ABCMeta):
         else:
             return self.forward_test(img, img_metas, **kwargs)
 
-    def _preprocss_data(self, img, kwargs, return_loss):
+    def _preprocss_data(self, data, kwargs, return_loss):
         if return_loss:
             # train
-            data = img[0]
+            imgs_ = []
+            img_metas = []
+            gt_bboxes = []
+            gt_labels = []
+            gt_masks = []
+            padding_value = 0
+            for single_data in data[0]:
+                img_metas.append(single_data['img_metas'].data)
+                gt_bboxes.append(single_data['gt_bboxes'].data.cuda(non_blocking=True))
+                gt_labels.append(single_data['gt_labels'].data.cuda(non_blocking=True))
+                if 'gt_masks' in single_data:
+                    gt_masks.append(single_data['gt_masks'].data)
 
-            gt_bboxes = data['gt_bboxes']
-            gt_labels = data['gt_labels']
-            if 'gt_masks' in data:
-                gt_masks = data['gt_masks'].data[0]
+                imgs_.append(single_data['img'].data)
+                padding_value = single_data['img'].padding_value
+
+            img = self._to_batch_imgs(imgs_, padding_value)
+
+            data = {'gt_bboxes': gt_bboxes, "gt_labels": gt_labels}
+            kwargs.update(data)
+            if len(gt_masks) > 0:
                 kwargs.update({'gt_masks': gt_masks})
-
-            gt_bboxes = gt_bboxes.data[0]
-            gt_bboxes = [bbox.cuda(non_blocking=True) for bbox in gt_bboxes]
-            gt_labels = gt_labels.data[0]
-            gt_labels = [label.cuda(non_blocking=True) for label in gt_labels]
-
-            gt_metas = {'gt_bboxes': gt_bboxes, "gt_labels": gt_labels}
-            kwargs.update(gt_metas)
-
-            img = data['img']
-            img_metas = data['img_metas']
-            img = img.data[0].cuda(non_blocking=True)
-            img_metas = img_metas.data[0]
         else:
             # test
-            data = img
-            imgs = data['img']
-            img = [img.cuda(non_blocking=True) for img in imgs]
-            img_metas = data['img_metas']
-            img_metas = [img_meta.data[0] for img_meta in img_metas]
+            imgs_ = []
+            img_metas = []
+
+            for single_data in data:
+                imgs_.append(single_data['img'])
+                img_metas.append([img_meta.data for img_meta in single_data['img_metas']])
+
+            transposed_img_ = zip(*imgs_)
+            img = [self._to_batch_imgs(img) for img in transposed_img_]
+            img_metas = list(zip(*img_metas))
 
         return img, img_metas, kwargs
+
+    def _to_batch_imgs(self, imgs, padding_value=0):
+        image_sizes = [(im.shape[-2], im.shape[-1]) for im in imgs]
+        max_size = np.stack(image_sizes).max(0)
+        padded_samples = []
+        for img in imgs:
+            padding_size = [0, max_size[-1] - img.shape[-1], 0, max_size[-2] - img.shape[-2]]
+            if sum(padding_size) == 0:
+                padded_samples.append(img)
+            else:
+                padded_samples.append(F.pad(img, padding_size, value=padding_value))
+
+        return torch.stack(padded_samples, dim=0).cuda(non_blocking=True)
 
     def _parse_losses(self, losses):
         """Parse the raw outputs (losses) of the network.

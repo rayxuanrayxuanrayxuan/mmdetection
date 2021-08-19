@@ -79,6 +79,13 @@ def build_dataset(cfg, default_args=None):
     return dataset
 
 
+def trivial_batch_collator(batch):
+    """
+    A batch collator that does nothing.
+    """
+    return batch
+
+
 def build_dataloader(dataset,
                      samples_per_gpu,
                      workers_per_gpu,
@@ -133,7 +140,7 @@ def build_dataloader(dataset,
         batch_size=batch_size,
         sampler=sampler,
         num_workers=num_workers,
-        collate_fn=partial(collate, samples_per_gpu=samples_per_gpu),
+        collate_fn=trivial_batch_collator,
         pin_memory=False,
         worker_init_fn=init_fn,
         **kwargs)
