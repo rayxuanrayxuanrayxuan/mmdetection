@@ -167,34 +167,42 @@ class BaseDetector(BaseModule, metaclass=ABCMeta):
             assert len(img_metas) == 1
             return self.onnx_export(img[0], img_metas[0])
 
-        img, img_metas, kwarg = self._preprocss_data(img, img_metas, kwargs)
-
         if return_loss:
             return self.forward_train(img, img_metas, **kwargs)
         else:
             return self.forward_test(img, img_metas, **kwargs)
 
-    def _preprocss_data(self, img, img_metas, kwargs):
-        # Obsolete mmcv MMDDP
-        data = img[0]
-        img = data['img']
-        img_metas = data['img_metas']
-        gt_bboxes = data['gt_bboxes']
-        gt_labels = data['gt_labels']
-        if 'gt_masks' in data:
-            gt_masks = data['gt_masks'].data[0]
-            kwargs.update({'gt_masks': gt_masks})
+    def _preprocss_data(self, img, kwargs, return_loss):
+        if return_loss:
+            # train
+            data = img[0]
 
-        img = img.data[0].cuda(non_blocking=True)
-        img_metas = img_metas.data[0]
-        gt_bboxes = gt_bboxes.data[0]
-        gt_bboxes = [bbox.cuda(non_blocking=True) for bbox in gt_bboxes]
-        gt_labels = gt_labels.data[0]
-        gt_labels = [label.cuda(non_blocking=True) for label in gt_labels]
+            gt_bboxes = data['gt_bboxes']
+            gt_labels = data['gt_labels']
+            if 'gt_masks' in data:
+                gt_masks = data['gt_masks'].data[0]
+                kwargs.update({'gt_masks': gt_masks})
 
-        data = {'gt_bboxes': gt_bboxes, "gt_labels": gt_labels}
+            gt_bboxes = gt_bboxes.data[0]
+            gt_bboxes = [bbox.cuda(non_blocking=True) for bbox in gt_bboxes]
+            gt_labels = gt_labels.data[0]
+            gt_labels = [label.cuda(non_blocking=True) for label in gt_labels]
 
-        kwargs.update(data)
+            gt_metas = {'gt_bboxes': gt_bboxes, "gt_labels": gt_labels}
+            kwargs.update(gt_metas)
+
+            img = data['img']
+            img_metas = data['img_metas']
+            img = img.data[0].cuda(non_blocking=True)
+            img_metas = img_metas.data[0]
+        else:
+            # test
+            data = img
+            imgs = data['img']
+            img = [img.cuda(non_blocking=True) for img in imgs]
+            img_metas = data['img_metas']
+            img_metas = [img_meta.data[0] for img_meta in img_metas]
+
         return img, img_metas, kwargs
 
     def _parse_losses(self, losses):
@@ -232,7 +240,7 @@ class BaseDetector(BaseModule, metaclass=ABCMeta):
 
         return loss, log_vars
 
-    def forward(self, data, optimizer):
+    def forward(self, data, optimizer=None, return_loss=True, **kwargs):
         """The iteration step during training.
 
         This method defines an iteration step during training, except for the
@@ -259,13 +267,21 @@ class BaseDetector(BaseModule, metaclass=ABCMeta):
                   DDP, it means the batch size on each GPU), which is used for
                   averaging the logs.
         """
-        losses = self._forward(data)
-        loss, log_vars = self._parse_losses(losses)
 
-        outputs = dict(
-            loss=loss, log_vars=log_vars, num_samples=len(data[0]['img_metas'].data[0]))
+        img, img_metas, kwargs = self._preprocss_data(data, kwargs, return_loss)
 
-        return outputs
+        if return_loss:
+            # train
+            losses = self._forward(img, img_metas, return_loss=True, **kwargs)
+            loss, log_vars = self._parse_losses(losses)
+
+            outputs = dict(
+                loss=loss, log_vars=log_vars, num_samples=len(img_metas))
+
+            return outputs
+        else:
+            # test
+            return self._forward(img, img_metas, return_loss=False, **kwargs)
 
     def val_step(self, data, optimizer=None):
         """The iteration step during validation.
