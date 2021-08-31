@@ -3,6 +3,7 @@ import os
 import random
 
 import torch
+import torch.nn as nn
 import torch.distributed as dist
 import torch.multiprocessing as mp
 
@@ -70,6 +71,89 @@ def d2_all_gather(backend, with_cuda=True):
 
     if dist.get_rank() == 0:
         print(f'total len={len(all_data)}, {all_data}', flush=True)
+
+
+# demo3
+def mmcv_sync_bn():
+    from collections import OrderedDict
+    from torch._utils import (_flatten_dense_tensors, _take_tensors,
+                              _unflatten_dense_tensors)
+
+    model = None
+
+    # 1 mm 系列中同步 bn 的写法
+    # tensors = list[Tensor]
+
+    import torch.nn.parallel.comm #这个文件下面有很多高效内置的同步代码实现
+    # comm.broadcast_coalesced 好像有可直接调用的含义(ddp内部自动调用)
+    def _allreduce_coalesced(tensors, world_size, bucket_size_mb=-1):
+        if bucket_size_mb > 0:
+            # 如果要同步的数据量过大，可以考虑采用迭代器切分进行同步
+            # _take_tensors 实现了该功能
+            # 默认是类型全部相同
+            bucket_size_bytes = bucket_size_mb * 1024 * 1024
+            buckets = _take_tensors(tensors, bucket_size_bytes)
+        else:
+            # 否则对不同类型的数据进行分组，因为不同类型需要分开来进行同步
+            buckets = OrderedDict()
+            for tensor in tensors:
+                tp = tensor.type()
+                if tp not in buckets:
+                    buckets[tp] = []
+                buckets[tp].append(tensor)
+            buckets = buckets.values()
+
+        # 对不同组进行单独进行同步
+        for bucket in buckets:
+            flat_tensors = _flatten_dense_tensors(bucket)
+            dist.all_reduce(flat_tensors)
+            flat_tensors.div_(world_size)
+            for tensor, synced in zip(
+                    bucket, _unflatten_dense_tensors(flat_tensors, bucket)):
+                # 原地 copy
+                tensor.copy_(synced)
+
+    def allreduce_params(params, coalesce=True, bucket_size_mb=-1):
+        """Allreduce parameters.
+
+        Args:
+            params (list[torch.Parameters]): List of parameters or buffers of a
+                model.
+            coalesce (bool, optional): Whether allreduce parameters as a whole.
+                Defaults to True.
+            bucket_size_mb (int, optional): Size of bucket, the unit is MB.
+                Defaults to -1.
+        """
+        world_size = dist.get_world_size()
+        if world_size == 1:
+            return
+        params = [param.data for param in params]
+        if coalesce:
+            # 合并到一起然后进行同步
+            _allreduce_coalesced(params, world_size, bucket_size_mb)
+        else:
+            # 不合并，每个 tensor 单独同步，非常慢
+            for tensor in params:
+                dist.all_reduce(tensor.div_(world_size))
+
+    allreduce_params(model.buffers())
+
+    # 2 yolox 的同步写法如下：
+    from mmdet.core.utils.dist_utils import all_reduce_dict
+
+    def get_norm_states(module):
+        async_norm_states = OrderedDict()
+        for name, child in module.named_modules():
+            if isinstance(child, nn.modules.batchnorm._NormBase):
+                for k, v in child.state_dict().items():
+                    async_norm_states['.'.join([name, k])] = v
+        return async_norm_states
+
+    norm_states = get_norm_states(model)
+    # 前面分析的同步字典函数
+    norm_states = all_reduce_dict(norm_states, op='mean')
+    # 重新load
+    model.load_state_dict(norm_states, strict=False)
 
 
 def example(rank, world_size, with_cuda):
