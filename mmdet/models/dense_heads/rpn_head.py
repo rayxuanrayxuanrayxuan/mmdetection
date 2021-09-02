@@ -76,6 +76,7 @@ class RPNHead(AnchorHead):
         return dict(
             loss_rpn_cls=losses['loss_cls'], loss_rpn_bbox=losses['loss_bbox'])
 
+    @torch.no_grad()
     @force_fp32(apply_to=('cls_scores', 'bbox_preds'))
     def get_bboxes(self,
                    cls_scores,
@@ -122,7 +123,7 @@ class RPNHead(AnchorHead):
                 cls_scores[i][img_id].detach() for i in range(num_levels)
             ]
             bbox_pred_list = [
-                bbox_preds[i][img_id].detach() for i in range(num_levels)
+                bbox_preds[i][img_id] for i in range(num_levels)
             ]
             img_shape = img_metas[img_id]['img_shape']
             scale_factor = img_metas[img_id]['scale_factor']
@@ -177,8 +178,8 @@ class RPNHead(AnchorHead):
             assert rpn_cls_score.size()[-2:] == rpn_bbox_pred.size()[-2:]
             rpn_cls_score = rpn_cls_score.permute(1, 2, 0)
             if self.use_sigmoid_cls:
-                rpn_cls_score = rpn_cls_score.reshape(-1)
-                scores = rpn_cls_score.sigmoid()
+                scores = rpn_cls_score.reshape(-1)
+                # scores = rpn_cls_score.sigmoid()
             else:
                 rpn_cls_score = rpn_cls_score.reshape(-1, 2)
                 # We set FG labels to [0, num_class-1] and BG label to

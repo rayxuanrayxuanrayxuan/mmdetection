@@ -140,9 +140,12 @@ def bbox2delta(proposals, gt, means=(0., 0., 0., 0.), stds=(1., 1., 1., 1.)):
 
     return deltas
 
+import math
+_DEFAULT_SCALE_CLAMP = math.log(1000.0 / 16)
+
 
 @mmcv.jit(coderize=True)
-def delta2bbox(rois,
+def delta2bbox(boxes,
                deltas,
                means=(0., 0., 0., 0.),
                stds=(1., 1., 1., 1.),
@@ -203,70 +206,38 @@ def delta2bbox(rois,
                 [0.0000, 0.3161, 4.1945, 0.6839],
                 [5.0000, 5.0000, 5.0000, 5.0000]])
     """
-    means = deltas.new_tensor(means).view(1,
-                                          -1).repeat(1,
-                                                     deltas.size(-1) // 4)
-    stds = deltas.new_tensor(stds).view(1, -1).repeat(1, deltas.size(-1) // 4)
-    denorm_deltas = deltas * stds + means
-    dx = denorm_deltas[..., 0::4]
-    dy = denorm_deltas[..., 1::4]
-    dw = denorm_deltas[..., 2::4]
-    dh = denorm_deltas[..., 3::4]
+    deltas = deltas.float()  # ensure fp32 for decoding precision
+    boxes = boxes.to(deltas.dtype)
 
-    x1, y1 = rois[..., 0], rois[..., 1]
-    x2, y2 = rois[..., 2], rois[..., 3]
-    # Compute center of each roi
-    px = ((x1 + x2) * 0.5).unsqueeze(-1).expand_as(dx)
-    py = ((y1 + y2) * 0.5).unsqueeze(-1).expand_as(dy)
-    # Compute width/height of each roi
-    pw = (x2 - x1).unsqueeze(-1).expand_as(dw)
-    ph = (y2 - y1).unsqueeze(-1).expand_as(dh)
+    widths = boxes[:, 2] - boxes[:, 0]
+    heights = boxes[:, 3] - boxes[:, 1]
+    ctr_x = boxes[:, 0] + 0.5 * widths
+    ctr_y = boxes[:, 1] + 0.5 * heights
 
-    dx_width = pw * dx
-    dy_height = ph * dy
+    dx = deltas[:, 0::4]
+    dy = deltas[:, 1::4]
+    dw = deltas[:, 2::4]
+    dh = deltas[:, 3::4]
 
-    max_ratio = np.abs(np.log(wh_ratio_clip))
-    if add_ctr_clamp:
-        dx_width = torch.clamp(dx_width, max=ctr_clamp, min=-ctr_clamp)
-        dy_height = torch.clamp(dy_height, max=ctr_clamp, min=-ctr_clamp)
-        dw = torch.clamp(dw, max=max_ratio)
-        dh = torch.clamp(dh, max=max_ratio)
+    # Prevent sending too large values into torch.exp()
+    dw = torch.clamp(dw, max=_DEFAULT_SCALE_CLAMP)
+    dh = torch.clamp(dh, max=_DEFAULT_SCALE_CLAMP)
+
+    pred_ctr_x = dx * widths[:, None] + ctr_x[:, None]
+    pred_ctr_y = dy * heights[:, None] + ctr_y[:, None]
+    pred_w = torch.exp(dw) * widths[:, None]
+    pred_h = torch.exp(dh) * heights[:, None]
+
+    if max_shape is not None:
+        x1 = (pred_ctr_x - 0.5 * pred_w).clamp(min=0, max=max_shape[1])
+        y1 = (pred_ctr_y - 0.5 * pred_h).clamp(min=0, max=max_shape[0])
+        x2 = (pred_ctr_x + 0.5 * pred_w).clamp(min=0, max=max_shape[1])
+        y2 = (pred_ctr_y + 0.5 * pred_h).clamp(min=0, max=max_shape[0])
     else:
-        dw = dw.clamp(min=-max_ratio, max=max_ratio)
-        dh = dh.clamp(min=-max_ratio, max=max_ratio)
-    # Use exp(network energy) to enlarge/shrink each roi
-    gw = pw * dw.exp()
-    gh = ph * dh.exp()
-    # Use network energy to shift the center of each roi
-    gx = px + dx_width
-    gy = py + dy_height
-    # Convert center-xy/width/height to top-left, bottom-right
-    x1 = gx - gw * 0.5
-    y1 = gy - gh * 0.5
-    x2 = gx + gw * 0.5
-    y2 = gy + gh * 0.5
+        x1 = (pred_ctr_x - 0.5 * pred_w)
+        y1 = (pred_ctr_y - 0.5 * pred_h)
+        x2 = (pred_ctr_x + 0.5 * pred_w)
+        y2 = (pred_ctr_y + 0.5 * pred_h)
 
-    bboxes = torch.stack([x1, y1, x2, y2], dim=-1).view(deltas.size())
-
-    if clip_border and max_shape is not None:
-        # clip bboxes with dynamic `min` and `max` for onnx
-        if torch.onnx.is_in_onnx_export():
-            from mmdet.core.export import dynamic_clip_for_onnx
-            x1, y1, x2, y2 = dynamic_clip_for_onnx(x1, y1, x2, y2, max_shape)
-            bboxes = torch.stack([x1, y1, x2, y2], dim=-1).view(deltas.size())
-            return bboxes
-        if not isinstance(max_shape, torch.Tensor):
-            max_shape = x1.new_tensor(max_shape)
-        max_shape = max_shape[..., :2].type_as(x1)
-        if max_shape.ndim == 2:
-            assert bboxes.ndim == 3
-            assert max_shape.size(0) == bboxes.size(0)
-
-        min_xy = x1.new_tensor(0)
-        max_xy = torch.cat(
-            [max_shape] * (deltas.size(-1) // 2),
-            dim=-1).flip(-1).unsqueeze(-2)
-        bboxes = torch.where(bboxes < min_xy, min_xy, bboxes)
-        bboxes = torch.where(bboxes > max_xy, max_xy, bboxes)
-
-    return bboxes
+    pred_boxes = torch.stack((x1, y1, x2, y2), dim=-1)
+    return pred_boxes.reshape(deltas.shape)
