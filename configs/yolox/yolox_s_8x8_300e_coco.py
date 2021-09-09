@@ -54,7 +54,7 @@ train_pipeline = [
 file_client_args = dict(
     backend='petrel',
     path_mapping=dict({
-        './data/coco/': 's3://openmmlab/datasets/detection/coco/',
+        '.data/coco/': 's3://openmmlab/datasets/detection/coco/',
         'data/coco/': 's3://openmmlab/datasets/detection/coco/'
     }))
 
