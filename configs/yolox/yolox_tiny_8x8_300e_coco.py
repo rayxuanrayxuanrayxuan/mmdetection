@@ -32,8 +32,16 @@ train_pipeline = [
     dict(type='Collect', keys=['img', 'gt_bboxes', 'gt_labels'])
 ]
 
+# file_client_args = dict(backend='disk')
+file_client_args = dict(
+    backend='petrel',
+    path_mapping=dict({
+        './data/coco/': 's3://openmmlab/datasets/detection/coco/',
+        'data/coco/': 's3://openmmlab/datasets/detection/coco/'
+    }))
+
 test_pipeline = [
-    dict(type='LoadImageFromFile'),
+    dict(type='LoadImageFromFile', file_client_args=file_client_args),
     dict(
         type='MultiScaleFlipAug',
         img_scale=(416, 416),
