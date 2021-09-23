@@ -19,6 +19,31 @@ from mmdet.models import build_detector
 from mmdet.utils import collect_env, get_root_logger
 
 
+def replace_ceph_backend(cfg):
+    cfg_pretty_text = cfg.pretty_text
+
+    replace_strs = r'''file_client_args = dict(
+                    backend='petrel',
+                    path_mapping=dict({
+                        '.data/INPLACEHOLD/': 's3://openmmlab/datasets/detection/INPLACEHOLD/',
+                        'data/INPLACEHOLD/': 's3://openmmlab/datasets/detection/INPLACEHOLD/'
+                    }))
+                '''
+
+    if 'cityscapes' in cfg_pretty_text:
+        replace_strs = replace_strs.replace('INPLACEHOLD', 'cityscapes')
+    elif 'coco' in cfg_pretty_text:
+        replace_strs = replace_strs.replace('INPLACEHOLD', 'coco')
+    else:
+        NotImplemented('Does not support global replacement')
+
+    replace_strs = replace_strs.replace(' ', '').replace('\n', '')
+    replace_strs = 'LoadImageFromFile\',' + replace_strs
+    cfg_pretty_text = cfg_pretty_text.replace('LoadImageFromFile\'', replace_strs)
+    cfg = cfg.fromstring(cfg_pretty_text, file_format='.py')
+    return cfg
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description='Train a detector')
     parser.add_argument('config', help='train config file path')
@@ -88,6 +113,9 @@ def main():
     args = parse_args()
 
     cfg = Config.fromfile(args.config)
+
+    cfg = replace_ceph_backend(cfg)
+
     if args.cfg_options is not None:
         cfg.merge_from_dict(args.cfg_options)
     # import modules from string list.
