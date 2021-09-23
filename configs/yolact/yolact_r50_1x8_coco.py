@@ -89,8 +89,18 @@ dataset_type = 'CocoDataset'
 data_root = 'data/coco/'
 img_norm_cfg = dict(
     mean=[123.68, 116.78, 103.94], std=[58.40, 57.12, 57.38], to_rgb=True)
+
+
+# file_client_args = dict(backend='disk')
+file_client_args = dict(
+    backend='petrel',
+    path_mapping=dict({
+        '.data/coco/': 's3://openmmlab/datasets/detection/coco/',
+        'data/coco/': 's3://openmmlab/datasets/detection/coco/'
+    }))
+
 train_pipeline = [
-    dict(type='LoadImageFromFile', to_float32=True),
+    dict(type='LoadImageFromFile', to_float32=True, file_client_args=file_client_args),
     dict(type='LoadAnnotations', with_bbox=True, with_mask=True),
     dict(type='FilterAnnotations', min_gt_bbox_wh=(4.0, 4.0)),
     dict(
@@ -115,7 +125,7 @@ train_pipeline = [
     dict(type='Collect', keys=['img', 'gt_bboxes', 'gt_labels', 'gt_masks']),
 ]
 test_pipeline = [
-    dict(type='LoadImageFromFile'),
+    dict(type='LoadImageFromFile', file_client_args=file_client_args),
     dict(
         type='MultiScaleFlipAug',
         img_scale=(img_size, img_size),

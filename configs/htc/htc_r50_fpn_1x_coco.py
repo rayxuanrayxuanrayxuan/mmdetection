@@ -17,10 +17,19 @@ model = dict(
             loss_seg=dict(
                 type='CrossEntropyLoss', ignore_index=255, loss_weight=0.2))))
 data_root = 'data/coco/'
+
+# file_client_args = dict(backend='disk')
+file_client_args = dict(
+    backend='petrel',
+    path_mapping=dict({
+        '.data/coco/': 's3://openmmlab/datasets/detection/coco/',
+        'data/coco/': 's3://openmmlab/datasets/detection/coco/'
+    }))
+
 img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
 train_pipeline = [
-    dict(type='LoadImageFromFile'),
+    dict(type='LoadImageFromFile', file_client_args=file_client_args),
     dict(
         type='LoadAnnotations', with_bbox=True, with_mask=True, with_seg=True),
     dict(type='Resize', img_scale=(1333, 800), keep_ratio=True),
@@ -34,7 +43,7 @@ train_pipeline = [
         keys=['img', 'gt_bboxes', 'gt_labels', 'gt_masks', 'gt_semantic_seg']),
 ]
 test_pipeline = [
-    dict(type='LoadImageFromFile'),
+    dict(type='LoadImageFromFile', file_client_args=file_client_args),
     dict(
         type='MultiScaleFlipAug',
         img_scale=(1333, 800),

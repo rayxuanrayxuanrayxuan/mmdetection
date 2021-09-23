@@ -3,8 +3,17 @@ dataset_type = 'CocoPanopticDataset'
 data_root = 'data/coco/'
 img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
+
+# file_client_args = dict(backend='disk')
+file_client_args = dict(
+    backend='petrel',
+    path_mapping=dict({
+        '.data/coco/': 's3://openmmlab/datasets/detection/coco/',
+        'data/coco/': 's3://openmmlab/datasets/detection/coco/'
+    }))
+
 train_pipeline = [
-    dict(type='LoadImageFromFile'),
+    dict(type='LoadImageFromFile', file_client_args=file_client_args),
     dict(
         type='LoadPanopticAnnotations',
         with_bbox=True,
@@ -21,7 +30,7 @@ train_pipeline = [
         keys=['img', 'gt_bboxes', 'gt_labels', 'gt_masks', 'gt_semantic_seg']),
 ]
 test_pipeline = [
-    dict(type='LoadImageFromFile'),
+    dict(type='LoadImageFromFile', file_client_args=file_client_args),
     dict(
         type='MultiScaleFlipAug',
         img_scale=(1333, 800),
