@@ -37,9 +37,24 @@ def replace_ceph_backend(cfg):
     else:
         NotImplemented('Does not support global replacement')
 
+    # replace LoadImageFromFile
     replace_strs = replace_strs.replace(' ', '').replace('\n', '')
-    replace_strs = 'LoadImageFromFile\',' + replace_strs
-    cfg_pretty_text = cfg_pretty_text.replace('LoadImageFromFile\'', replace_strs)
+    cfg_pretty_text = cfg_pretty_text.replace('LoadImageFromFile\'', 'LoadImageFromFile\',' + replace_strs)
+
+    # replace LoadPanopticAnnotations
+    if 'LoadPanopticAnnotations' in cfg_pretty_text:
+        cfg_pretty_text = cfg_pretty_text.replace('LoadPanopticAnnotations\'',
+                                                  'LoadPanopticAnnotations\',' + replace_strs)
+    else:
+        # replace instance seg
+        train_data_cfg = cfg.data.train
+        while 'dataset' in train_data_cfg and train_data_cfg['type'] != 'MultiImageMixDataset':
+            train_data_cfg = train_data_cfg['dataset']
+        for pipeline in train_data_cfg.pipeline:
+            if 'LoadAnnotations' in pipeline['type'] and 'with_seg' in pipeline and pipeline['with_seg'] is True:
+                cfg_pretty_text = cfg_pretty_text.replace('LoadAnnotations\'',
+                                                          'LoadAnnotations\',' + replace_strs)
+
     cfg = cfg.fromstring(cfg_pretty_text, file_format='.py')
     return cfg
 
