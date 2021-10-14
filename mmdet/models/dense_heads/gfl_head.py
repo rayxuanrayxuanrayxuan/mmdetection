@@ -380,6 +380,7 @@ class GFLHead(AnchorHead):
                            cls_score_list,
                            bbox_pred_list,
                            score_factor_list,
+                           mlvl_anchors,
                            img_meta,
                            cfg,
                            rescale=False,
@@ -425,12 +426,12 @@ class GFLHead(AnchorHead):
         mlvl_bboxes = []
         mlvl_scores = []
         mlvl_classes_idxs = []
-        for level_idx, (cls_score, bbox_pred, stride) in enumerate(
+        for level_idx, (cls_score, bbox_pred, stride, anchors) in enumerate(
                 zip(cls_score_list, bbox_pred_list,
-                    self.prior_generator.strides)):
+                    self.prior_generator.strides, mlvl_anchors)):
             assert cls_score.size()[-2:] == bbox_pred.size()[-2:]
             assert stride[0] == stride[1]
-            featmap_size_hw = cls_score.shape[-2:]
+            # featmap_size_hw = cls_score.shape[-2:]
 
             bbox_pred = bbox_pred.permute(1, 2, 0)
             bbox_pred = self.integral(bbox_pred) * stride[0]
@@ -453,9 +454,10 @@ class GFLHead(AnchorHead):
 
             bbox_pred = bbox_pred[anchor_idxs]
 
-            priors = self.prior_generator.sparse_priors(
-                anchor_idxs, featmap_size_hw, level_idx, bbox_pred.dtype,
-                bbox_pred.device)
+            # priors = self.prior_generator.sparse_priors(
+            #     anchor_idxs, featmap_size_hw, level_idx, bbox_pred.dtype,
+            #     bbox_pred.device)
+            priors = anchors[anchor_idxs]
 
             bboxes = self.bbox_coder.decode(
                 self.anchor_center(priors), bbox_pred, max_shape=img_shape)

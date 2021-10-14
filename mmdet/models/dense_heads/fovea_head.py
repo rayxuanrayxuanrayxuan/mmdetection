@@ -270,6 +270,7 @@ class FoveaHead(AnchorFreeHead):
                            cls_score_list,
                            bbox_pred_list,
                            score_factor_list,
+                           mlvl_anchors,
                            img_meta,
                            cfg,
                            rescale=False,
@@ -316,11 +317,11 @@ class FoveaHead(AnchorFreeHead):
         det_bboxes = []
         det_scores = []
         det_classes_idxs = []
-        for level_idx, (cls_score, bbox_pred, stride, base_len) in enumerate(
+        for level_idx, (cls_score, bbox_pred, stride, base_len, anchors) in enumerate(
                 zip(cls_score_list, bbox_pred_list, self.strides,
-                    self.base_edge_list)):
+                    self.base_edge_list, mlvl_anchors)):
             assert cls_score.size()[-2:] == bbox_pred.size()[-2:]
-            featmap_size_hw = cls_score.shape[-2:]
+            # featmap_size_hw = cls_score.shape[-2:]
             bbox_pred = bbox_pred.permute(1, 2, 0).reshape(-1, 4)
 
             scores = cls_score.permute(1, 2, 0).reshape(
@@ -341,9 +342,10 @@ class FoveaHead(AnchorFreeHead):
 
             bbox_pred = bbox_pred[anchor_idxs]
 
-            priors = self.prior_generator.sparse_priors(
-                anchor_idxs, featmap_size_hw, level_idx, bbox_pred.dtype,
-                bbox_pred.device)
+            # priors = self.prior_generator.sparse_priors(
+            #     anchor_idxs, featmap_size_hw, level_idx, bbox_pred.dtype,
+            #     bbox_pred.device)
+            priors = anchors[anchor_idxs]
 
             bboxes = self._bbox_decode(priors, bbox_pred, base_len, img_shape)
 

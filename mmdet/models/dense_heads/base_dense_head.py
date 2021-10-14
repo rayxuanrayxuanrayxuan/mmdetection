@@ -72,6 +72,10 @@ class BaseDenseHead(BaseModule, metaclass=ABCMeta):
             assert len(cls_scores) == len(score_factors)
 
         num_levels = len(cls_scores)
+        device = cls_scores[0].device
+        featmap_sizes = [cls_scores[i].shape[-2:] for i in range(num_levels)]
+        mlvl_anchors = self.prior_generator.grid_priors(
+            featmap_sizes, device=device)
 
         result_list = []
 
@@ -85,7 +89,8 @@ class BaseDenseHead(BaseModule, metaclass=ABCMeta):
                 score_factor_list = [None for _ in range(num_levels)]
 
             results = self._get_bboxes_single(cls_score_list, bbox_pred_list,
-                                              score_factor_list, img_meta, cfg,
+                                              score_factor_list, mlvl_anchors,
+                                              img_meta, cfg,
                                               rescale, with_nms, **kwargs)
             result_list.append(results)
         return result_list
@@ -94,6 +99,7 @@ class BaseDenseHead(BaseModule, metaclass=ABCMeta):
                            cls_score_list,
                            bbox_pred_list,
                            score_factor_list,
+                           mlvl_anchors,
                            img_meta,
                            cfg,
                            rescale=False,
@@ -151,11 +157,10 @@ class BaseDenseHead(BaseModule, metaclass=ABCMeta):
             mlvl_score_factors = []
         else:
             mlvl_score_factors = None
-        for level_idx, (cls_score, bbox_pred, score_factor) in enumerate(
-                zip(cls_score_list, bbox_pred_list, score_factor_list)):
+        for level_idx, (cls_score, bbox_pred, score_factor, anchors) in enumerate(
+                zip(cls_score_list, bbox_pred_list, score_factor_list, mlvl_anchors)):
 
             assert cls_score.size()[-2:] == bbox_pred.size()[-2:]
-            featmap_size_hw = cls_score.shape[-2:]
 
             bbox_pred = bbox_pred.permute(1, 2, 0).reshape(-1, 4)
             if with_score_factors:
@@ -190,9 +195,10 @@ class BaseDenseHead(BaseModule, metaclass=ABCMeta):
             if with_score_factors:
                 score_factor = score_factor[anchor_idxs]
 
-            priors = self.prior_generator.sparse_priors(
-                anchor_idxs, featmap_size_hw, level_idx, bbox_pred.dtype,
-                bbox_pred.device)
+            # priors = self.prior_generator.sparse_priors(
+            #     anchor_idxs, featmap_size_hw, level_idx, bbox_pred.dtype,
+            #     bbox_pred.device)
+            priors = anchors[anchor_idxs]
 
             bboxes = self.bbox_coder.decode(
                 priors, bbox_pred, max_shape=img_shape)
@@ -455,18 +461,18 @@ class BaseDenseHead(BaseModule, metaclass=ABCMeta):
 
                 batch_inds = torch.arange(
                     batch_size, device=bbox_pred.device).view(
-                        -1, 1).expand_as(topk_inds).long()
+                    -1, 1).expand_as(topk_inds).long()
                 # Avoid onnx2tensorrt issue in https://github.com/NVIDIA/TensorRT/issues/1134 # noqa: E501
                 transformed_inds = bbox_pred.shape[1] * batch_inds + topk_inds
                 priors = priors.reshape(
                     -1, priors.size(-1))[transformed_inds, :].reshape(
-                        batch_size, -1, priors.size(-1))
+                    batch_size, -1, priors.size(-1))
                 bbox_pred = bbox_pred.reshape(-1,
                                               4)[transformed_inds, :].reshape(
-                                                  batch_size, -1, 4)
+                    batch_size, -1, 4)
                 scores = scores.reshape(
                     -1, self.cls_out_channels)[transformed_inds, :].reshape(
-                        batch_size, -1, self.cls_out_channels)
+                    batch_size, -1, self.cls_out_channels)
                 if with_score_factors:
                     score_factors = score_factors.reshape(
                         -1, 1)[transformed_inds].reshape(batch_size, -1)
