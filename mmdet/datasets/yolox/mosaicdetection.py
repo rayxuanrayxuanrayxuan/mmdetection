@@ -9,6 +9,28 @@ import numpy as np
 
 from .data_augment import random_affine
 from .datasets_wrapper import Dataset
+from torch import distributed as dist
+
+_LOCAL_PROCESS_GROUP = None
+
+
+def adjust_box_anns(bbox, scale_ratio, padw, padh, w_max, h_max):
+    bbox[:, 0::2] = np.clip(bbox[:, 0::2] * scale_ratio + padw, 0, w_max)
+    bbox[:, 1::2] = np.clip(bbox[:, 1::2] * scale_ratio + padh, 0, h_max)
+    return bbox
+
+
+def get_local_rank() -> int:
+    """
+    Returns:
+        The rank of the current process within the local (per-machine) process group.
+    """
+    if not dist.is_available():
+        return 0
+    if not dist.is_initialized():
+        return 0
+    assert _LOCAL_PROCESS_GROUP is not None
+    return dist.get_rank(group=_LOCAL_PROCESS_GROUP)
 
 
 def get_mosaic_coordinate(mosaic_image, mosaic_index, xc, yc, w, h, input_h, input_w):
