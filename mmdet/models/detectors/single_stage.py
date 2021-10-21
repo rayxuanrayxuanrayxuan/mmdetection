@@ -7,6 +7,24 @@ from mmdet.core import bbox2result
 from ..builder import DETECTORS, build_backbone, build_head, build_neck
 from .base import BaseDetector
 
+import torch.nn.functional as F
+import random
+import torch.distributed as dist
+
+def get_world_size() -> int:
+    if not dist.is_available():
+        return 1
+    if not dist.is_initialized():
+        return 1
+    return dist.get_world_size()
+
+
+def get_rank() -> int:
+    if not dist.is_available():
+        return 0
+    if not dist.is_initialized():
+        return 0
+    return dist.get_rank()
 
 @DETECTORS.register_module()
 class SingleStageDetector(BaseDetector):
@@ -38,6 +56,11 @@ class SingleStageDetector(BaseDetector):
         self.train_cfg = train_cfg
         self.test_cfg = test_cfg
 
+        self.input_size = (640, 640)
+        self.progress_in_iter = 0
+        self.is_distributed = get_world_size() > 1
+        self.rank = get_rank()
+
     def extract_feat(self, img):
         """Directly extract features from the backbone+neck."""
         x = self.backbone(img)
@@ -53,6 +76,37 @@ class SingleStageDetector(BaseDetector):
         x = self.extract_feat(img)
         outs = self.bbox_head(x)
         return outs
+
+    def preprocess(self, inputs, targets, tsize):
+        scale_y = tsize[0] / 640
+        scale_x = tsize[1] / 640
+        if scale_x != 1 or scale_y != 1:
+            inputs = F.interpolate(
+                inputs, size=tsize, mode="bilinear", align_corners=False
+            )
+            for target in targets:
+                target[..., 0::2] = target[..., 0::2] * scale_x
+                target[..., 1::2] = target[..., 1::2] * scale_y
+        return inputs, targets
+
+    def random_resize(self, rank, is_distributed):
+        tensor = torch.LongTensor(2).cuda()
+
+        if rank == 0:
+            size_factor = 1.0
+            if not hasattr(self, 'random_size'):
+                self.random_size = (15, 25)
+            size = random.randint(*self.random_size)
+            size = (int(32 * size), 32 * int(size * size_factor))
+            tensor[0] = size[0]
+            tensor[1] = size[1]
+
+        if is_distributed:
+            dist.barrier()
+            dist.broadcast(tensor, 0)
+
+        input_size = (tensor[0].item(), tensor[1].item())
+        return input_size
 
     def forward_train(self,
                       img,
@@ -78,10 +132,19 @@ class SingleStageDetector(BaseDetector):
         Returns:
             dict[str, Tensor]: A dictionary of loss components.
         """
+        # print(img.shape, self.input_size)
+        img, gt_bboxes = self.preprocess(img, gt_bboxes, self.input_size)
+        # print(img.shape)
+
         super(SingleStageDetector, self).forward_train(img, img_metas)
         x = self.extract_feat(img)
         losses = self.bbox_head.forward_train(x, img_metas, gt_bboxes,
                                               gt_labels, gt_bboxes_ignore)
+
+        # random resizing
+        if (self.progress_in_iter + 1) % 10 == 0:
+            self.input_size = self.random_resize(self.rank, self.is_distributed)
+        self.progress_in_iter += 1
         return losses
 
     def simple_test(self, img, img_metas, rescale=False):

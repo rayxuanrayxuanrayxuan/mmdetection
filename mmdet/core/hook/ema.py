@@ -30,7 +30,7 @@ class BaseEMAHook(Hook):
     """
 
     def __init__(self,
-                 momentum=0.0002,
+                 momentum=0.0001,
                  interval=1,
                  skip_buffers=False,
                  resume_from=None,

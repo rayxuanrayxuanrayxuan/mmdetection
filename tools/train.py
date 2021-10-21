@@ -162,7 +162,21 @@ def main():
         test_cfg=cfg.get('test_cfg'))
     model.init_weights()
 
-    datasets = [build_dataset(cfg.data.train)]
+    from mmdet.datasets.yolox import YOLOXCOCODataset, MosaicDetection, TrainTransform,COCO_CLASSES
+
+    dataset = YOLOXCOCODataset(cfg.data.train.data_dir)
+
+    dataset = MosaicDetection(
+        dataset,
+        img_size=(640, 640),
+        preproc=TrainTransform(
+            max_labels=120),
+        mosaic_scale=(0.1, 2),
+        pipeline=cfg.data.train.pipeline
+    )
+
+    datasets = [dataset]
+
     if len(cfg.workflow) == 2:
         val_dataset = copy.deepcopy(cfg.data.val)
         val_dataset.pipeline = cfg.data.train.pipeline
@@ -172,9 +186,9 @@ def main():
         # checkpoints as meta data
         cfg.checkpoint_config.meta = dict(
             mmdet_version=__version__ + get_git_hash()[:7],
-            CLASSES=datasets[0].CLASSES)
+            CLASSES=COCO_CLASSES)
     # add an attribute for visualization convenience
-    model.CLASSES = datasets[0].CLASSES
+    model.CLASSES = COCO_CLASSES
     train_detector(
         model,
         datasets,
