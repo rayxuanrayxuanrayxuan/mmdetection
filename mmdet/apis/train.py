@@ -6,14 +6,67 @@ import numpy as np
 import torch
 from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
 from mmcv.runner import (HOOKS, DistSamplerSeedHook, EpochBasedRunner,
-                         Fp16OptimizerHook, OptimizerHook, build_optimizer,
-                         build_runner)
+                         Fp16OptimizerHook, OptimizerHook,
+                         build_runner, build_optimizer_constructor)
 from mmcv.utils import build_from_cfg
 
 from mmdet.core import DistEvalHook, EvalHook
 from mmdet.datasets import (build_dataloader, build_dataset,
                             replace_ImageToTensor)
 from mmdet.utils import get_root_logger
+
+from collections import defaultdict
+
+
+def _expand_param_groups(params):
+    # Transform parameter groups into per-parameter structure.
+    # Later items in `params` can overwrite parameters set in previous items.
+    ret = defaultdict(dict)
+    for item in params:
+        assert "params" in item
+        cur_params = {x: y for x, y in item.items() if x != "params"}
+        for param in item["params"]:
+            ret[param].update({"params": [param], **cur_params})
+    return list(ret.values())
+
+
+def reduce_param_groups(params):
+    # Reorganize the parameter groups and merge duplicated groups.
+    # The number of parameter groups needs to be as small as possible in order
+    # to efficiently use the PyTorch multi-tensor optimizer. Therefore instead
+    # of using a parameter_group per single parameter, we reorganize the
+    # parameter groups and merge duplicated groups. This approach speeds
+    # up multi-tensor optimizer significantly.
+    params = _expand_param_groups(params)
+    groups = defaultdict(list)  # re-group all parameter groups by their hyperparams
+    for item in params:
+        cur_params = tuple((x, y) for x, y in item.items() if x != "params")
+        groups[cur_params].extend(item["params"])
+    ret = []
+    for param_keys, param_values in groups.items():
+        cur = {kv[0]: kv[1] for kv in param_keys}
+        cur["params"] = param_values
+        ret.append(cur)
+    return ret
+
+
+import copy
+
+
+def build_optimizer(model, cfg):
+    optimizer_cfg = copy.deepcopy(cfg)
+    constructor_type = optimizer_cfg.pop('constructor',
+                                         'DefaultOptimizerConstructor')
+    paramwise_cfg = optimizer_cfg.pop('paramwise_cfg', None)
+    optim_constructor = build_optimizer_constructor(
+        dict(
+            type=constructor_type,
+            optimizer_cfg=optimizer_cfg,
+            paramwise_cfg=paramwise_cfg))
+    optimizer = optim_constructor(model)
+    param_groups = reduce_param_groups(optimizer.param_groups)
+    optimizer.param_groups = param_groups
+    return optimizer
 
 
 def set_random_seed(seed, deterministic=False):
