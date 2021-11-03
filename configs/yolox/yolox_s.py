@@ -40,7 +40,7 @@ data_root = 'data/coco/'
 
 data = dict(
     samples_per_gpu=8,
-    workers_per_gpu=2,
+    workers_per_gpu=4,
     train=dict(data_dir=data_root, pipeline=train_pipeline),
     val=dict(
         type='CocoDataset',
@@ -78,7 +78,7 @@ lr_config = dict(
 runner = dict(type='EpochBasedRunner', max_epochs=300)
 
 resume_from = None
-interval = 1
+interval = 10
 
 custom_hooks = [
     dict(type='YOLOXModeSwitchHook', num_last_epochs=15, priority=48),
