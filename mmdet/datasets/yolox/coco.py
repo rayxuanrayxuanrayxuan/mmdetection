@@ -61,7 +61,7 @@ class YOLOXCOCODataset(Dataset):
         file_client_args = dict(
             backend='petrel',
             path_mapping=dict({
-                self.data_dir: 's3://openmmlab/datasets/detection/coco'
+                self.data_dir: 's3://openmmlab/datasets/detection/coco/'
             }))
         self.file_client = mmcv.FileClient(**file_client_args)
 
