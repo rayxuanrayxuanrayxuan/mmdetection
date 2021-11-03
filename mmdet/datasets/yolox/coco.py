@@ -58,12 +58,14 @@ class YOLOXCOCODataset(Dataset):
             self._cache_images()
         self.flag = np.zeros(len(self), dtype=np.uint8)
 
-        file_client_args = dict(
-            backend='petrel',
-            path_mapping=dict({
-                self.data_dir: 's3://openmmlab/datasets/detection/coco/'
-            }))
-        self.file_client = mmcv.FileClient(**file_client_args)
+        self.use_ceph = True
+        if self.use_ceph:
+            file_client_args = dict(
+                backend='petrel',
+                path_mapping=dict({
+                    self.data_dir: 's3://openmmlab/datasets/detection/coco/'
+                }))
+            self.file_client = mmcv.FileClient(**file_client_args)
 
     def __len__(self):
         return len(self.ids)
@@ -178,12 +180,12 @@ class YOLOXCOCODataset(Dataset):
     def load_image(self, index):
         file_name = self.annotations[index][3]
 
-        # img_file = os.path.join(self.data_dir, self.name, file_name)
         img_file = os.path.join(self.data_dir, self.name, file_name)
-        img_bytes = self.file_client.get(img_file)
-        img = mmcv.imfrombytes(img_bytes)
-
-        # img = cv2.imread(img_file)
+        if self.use_ceph:
+            img_bytes = self.file_client.get(img_file)
+            img = mmcv.imfrombytes(img_bytes)
+        else:
+            img = cv2.imread(img_file)
         assert img is not None
 
         return img
@@ -226,4 +228,3 @@ class YOLOXCOCODataset(Dataset):
             img, target = self.preproc(img, target, self.input_dim)
         self.pipeline()
         return img, target, img_info, img_id
-
