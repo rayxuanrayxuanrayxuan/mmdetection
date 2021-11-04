@@ -20,8 +20,8 @@ model = dict(
 data_root = 'data/coco/'
 dataset_type = 'CocoDataset'
 
-img_norm_cfg = dict(
-    mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
+# img_norm_cfg = dict(
+#     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
 
 img_scale = (640, 640)
 
@@ -36,19 +36,23 @@ train_pipeline = [
         img_scale=img_scale,
         ratio_range=(0.8, 1.6),
         pad_val=114.0),
-    dict(
-        type='PhotoMetricDistortion',
-        brightness_delta=32,
-        contrast_range=(0.5, 1.5),
-        saturation_range=(0.5, 1.5),
-        hue_delta=18),
+    dict(type='YoloXHSVAug'),
     dict(type='RandomFlip', flip_ratio=0.5),
     dict(type='Resize', keep_ratio=True),
-    dict(type='Pad', pad_to_square=True, pad_val=114.0),
-    dict(type='Normalize', **img_norm_cfg),
+    dict(type='Pad', pad_to_square=True, pad_val=dict(img=(114.0, 114.0, 114.0))),
+    dict(type='YoloxFilterAnnotations'),
+    # dict(type='Normalize', **img_norm_cfg),
     dict(type='DefaultFormatBundle'),
     dict(type='Collect', keys=['img', 'gt_bboxes', 'gt_labels'])
 ]
+
+file_client_args = dict(
+    backend='petrel',
+    path_mapping=dict({
+        './data/': 's3://openmmlab/datasets/detection/',
+        'data/': 's3://openmmlab/datasets/detection/'
+    }))
+
 
 train_dataset = dict(
     type='MultiImageMixDataset',
@@ -57,7 +61,8 @@ train_dataset = dict(
         ann_file=data_root + 'annotations/instances_train2017.json',
         img_prefix=data_root + 'train2017/',
         pipeline=[
-            dict(type='LoadImageFromFile', to_float32=True),
+            dict(type='LoadImageFromFile', to_float32=False, file_client_args=file_client_args),
+            # dict(type='LoadImageFromFile', to_float32=False),
             dict(type='LoadAnnotations', with_bbox=True)
         ],
         filter_empty_gt=False,
@@ -66,7 +71,7 @@ train_dataset = dict(
     dynamic_scale=img_scale)
 
 test_pipeline = [
-    dict(type='LoadImageFromFile'),
+    dict(type='LoadImageFromFile', file_client_args=file_client_args),
     dict(
         type='MultiScaleFlipAug',
         img_scale=img_scale,
@@ -74,8 +79,8 @@ test_pipeline = [
         transforms=[
             dict(type='Resize', keep_ratio=True),
             dict(type='RandomFlip'),
-            dict(type='Pad', size=img_scale, pad_val=114.0),
-            dict(type='Normalize', **img_norm_cfg),
+            dict(type='Pad', size=img_scale, pad_val=dict(img=(114.0, 114.0, 114.0))),
+            # dict(type='Normalize', **img_norm_cfg),
             dict(type='DefaultFormatBundle'),
             dict(type='Collect', keys=['img'])
         ])
@@ -83,7 +88,7 @@ test_pipeline = [
 
 data = dict(
     samples_per_gpu=8,
-    workers_per_gpu=2,
+    workers_per_gpu=4,
     train=train_dataset,
     val=dict(
         type=dataset_type,
@@ -125,11 +130,6 @@ interval = 10
 
 custom_hooks = [
     dict(type='YOLOXModeSwitchHook', num_last_epochs=15, priority=48),
-    dict(
-        type='SyncRandomSizeHook',
-        ratio_range=(14, 26),
-        img_scale=img_scale,
-        priority=48),
     dict(
         type='SyncNormHook',
         num_last_epochs=15,

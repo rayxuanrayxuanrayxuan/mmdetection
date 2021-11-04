@@ -33,8 +33,7 @@ class YOLOXModeSwitchHook(Hook):
             model = model.module
         if (epoch + 1) == runner.max_epochs - self.num_last_epochs:
             runner.logger.info('No mosaic and mixup aug now!')
-            train_loader.close_mosaic()
-            # train_loader.dataset.enable_mosaic = False
-            # train_loader.dataset.update_skip_type_keys(self.skip_type_keys)
+            # train_loader.close_mosaic()
+            train_loader.dataset.update_skip_type_keys(self.skip_type_keys)
             runner.logger.info('Add additional L1 loss now!')
             model.bbox_head.use_l1 = True

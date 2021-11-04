@@ -120,7 +120,7 @@ def train_detector(model,
         cfg.data.samples_per_gpu = cfg.data.imgs_per_gpu
 
     data_loaders = [
-        build_dataloader(
+        mmdet_build_dataloader(
             ds,
             cfg.data.samples_per_gpu,
             cfg.data.workers_per_gpu,

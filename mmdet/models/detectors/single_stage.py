@@ -11,6 +11,7 @@ import torch.nn.functional as F
 import random
 import torch.distributed as dist
 
+
 def get_world_size() -> int:
     if not dist.is_available():
         return 1
@@ -78,6 +79,8 @@ class SingleStageDetector(BaseDetector):
         return outs
 
     def preprocess(self, inputs, targets, tsize):
+        inputs = inputs.float()
+
         scale_y = tsize[0] / 640
         scale_x = tsize[1] / 640
         if scale_x != 1 or scale_y != 1:
@@ -161,7 +164,7 @@ class SingleStageDetector(BaseDetector):
                 The outer list corresponds to each image. The inner list
                 corresponds to each class.
         """
-        feat = self.extract_feat(img)
+        feat = self.extract_feat(img.float())
         results_list = self.bbox_head.simple_test(
             feat, img_metas, rescale=rescale)
         bbox_results = [
