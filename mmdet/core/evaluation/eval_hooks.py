@@ -36,6 +36,19 @@ class EvalHook(BaseEvalHook):
 
 class DistEvalHook(BaseDistEvalHook):
 
+    def before_train_epoch(self, runner):
+        """Evaluate the model only at the start of training by epoch."""
+        epoch = runner.epoch
+        if (epoch + 1) == runner.max_epochs - 15:
+            # Synchronize norm every epoch.
+            self.interval = 1
+
+        if not (self.by_epoch and self.initial_flag):
+            return
+        if self.start is not None and runner.epoch >= self.start:
+            self.after_train_epoch(runner)
+        self.initial_flag = False
+
     def _do_evaluate(self, runner):
         """perform evaluation and save ckpt."""
         # Synchronization of BatchNorm's buffer (running_mean
