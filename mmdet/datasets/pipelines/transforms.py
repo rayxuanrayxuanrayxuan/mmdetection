@@ -2295,13 +2295,7 @@ class MixUp:
             list: indexes.
         """
 
-        for i in range(self.max_iters):
-            index = random.randint(0, len(dataset))
-            gt_bboxes_i = dataset.get_ann_info(index)['bboxes']
-            if len(gt_bboxes_i) != 0:
-                break
-
-        return index
+        return random.randint(0, len(dataset))
 
     def _mixup_transform(self, results):
         """MixUp transform function.
@@ -2316,10 +2310,6 @@ class MixUp:
         assert 'mix_results' in results
         assert len(
             results['mix_results']) == 1, 'MixUp only support 2 images now !'
-
-        if results['mix_results'][0]['gt_bboxes'].shape[0] == 0:
-            # empty bbox
-            return results
 
         retrieve_results = results['mix_results'][0]
         retrieve_img = retrieve_results['img']
@@ -2369,10 +2359,19 @@ class MixUp:
         if padded_img.shape[1] > target_w:
             x_offset = random.randint(0, padded_img.shape[1] - target_w)
         padded_cropped_img = padded_img[y_offset:y_offset + target_h,
-                                        x_offset:x_offset + target_w]
+                             x_offset:x_offset + target_w]
+
+        # mixup image
+        ori_img = ori_img.astype(np.float32)
+        mixup_img = 0.5 * ori_img + 0.5 * padded_cropped_img.astype(np.float32)
 
         # 6. adjust bbox
         retrieve_gt_bboxes = retrieve_results['gt_bboxes']
+        if retrieve_gt_bboxes.shape[0] == 0:
+            results['img'] = mixup_img.astype(np.uint8)
+            results['img_shape'] = mixup_img.shape
+            return results
+
         retrieve_gt_bboxes[:, 0::2] = np.clip(
             retrieve_gt_bboxes[:, 0::2] * scale_ratio, 0, origin_w)
         retrieve_gt_bboxes[:, 1::2] = np.clip(
@@ -2388,10 +2387,6 @@ class MixUp:
             cp_retrieve_gt_bboxes[:, 0::2] - x_offset, 0, target_w)
         cp_retrieve_gt_bboxes[:, 1::2] = np.clip(
             cp_retrieve_gt_bboxes[:, 1::2] - y_offset, 0, target_h)
-
-        # 8. mix up
-        ori_img = ori_img.astype(np.float32)
-        mixup_img = 0.5 * ori_img + 0.5 * padded_cropped_img.astype(np.float32)
 
         retrieve_gt_labels = retrieve_results['gt_labels']
         if not self.skip_filter_rule:
@@ -2534,7 +2529,7 @@ class RandomAffine:
         translate_matrix = self._get_translation_matrix(trans_x, trans_y)
 
         warp_matrix = (
-            translate_matrix @ shear_matrix @ rotation_matrix @ scaling_matrix)
+                translate_matrix @ shear_matrix @ rotation_matrix @ scaling_matrix)
 
         img = cv2.warpPerspective(
             img,
