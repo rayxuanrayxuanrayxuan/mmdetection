@@ -2615,8 +2615,8 @@ class RandomAffine:
     def _get_rotation_matrix(rotate_degrees):
         radian = math.radians(rotate_degrees)
         rotation_matrix = np.array(
-            [[np.cos(radian), -np.sin(radian), 0.],
-             [np.sin(radian), np.cos(radian), 0.], [0., 0., 1.]],
+            [[np.cos(radian), np.sin(radian), 0.],
+             [-np.sin(radian), np.cos(radian), 0.], [0., 0., 1.]],
             dtype=np.float32)
         return rotation_matrix
 
