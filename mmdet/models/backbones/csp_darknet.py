@@ -127,6 +127,7 @@ class CSPDarknet(BaseModule):
     Args:
         arch (str): Architecture of CSP-Darknet, from {P5, P6}.
             Default: P5.
+        input_channels(int): Number of input image channels. Default: 3.
         deepen_factor (float): Depth multiplier, multiply number of
             channels in each layer by this amount. Default: 1.0.
         widen_factor (float): Width multiplier, multiply number of
@@ -176,6 +177,7 @@ class CSPDarknet(BaseModule):
 
     def __init__(self,
                  arch='P5',
+                 input_channels=3,
                  deepen_factor=1.0,
                  widen_factor=1.0,
                  out_indices=(2, 3, 4),
@@ -212,7 +214,7 @@ class CSPDarknet(BaseModule):
         conv = DepthwiseSeparableConvModule if use_depthwise else ConvModule
 
         self.stem = Focus(
-            3,
+            input_channels,
             int(arch_setting[0][0] * widen_factor),
             kernel_size=3,
             conv_cfg=conv_cfg,
